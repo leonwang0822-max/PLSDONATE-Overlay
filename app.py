@@ -8,6 +8,9 @@ import traceback
 import time
 from datetime import datetime
 
+VERSION = "v1.0.0"
+GITHUB_REPO = "leonwang0822-max/PLSDONATE-Overlay"
+
 # Global Exception Hook to catch crashes and keep window open
 def exception_hook(exctype, value, tb):
     print("CRITICAL ERROR OCCURRED:")
@@ -402,9 +405,62 @@ if __name__ == "__main__":
                     
                     # Cleanup logger
                     logging.getLogger().removeHandler(gui_handler)
+                    
+                    # Check for updates in background
+                    threading.Thread(target=check_for_updates, args=(window,), daemon=True).start()
                 except Exception:
                     pass # Keep waiting
             
+            def check_for_updates(parent_window):
+                try:
+                    import requests
+                    url = f"https://api.github.com/repos/{GITHUB_REPO}/releases/latest"
+                    response = requests.get(url, timeout=5)
+                    if response.status_code == 200:
+                        data = response.json()
+                        latest_version = data.get("tag_name", "").strip()
+                        if latest_version and latest_version != VERSION:
+                            # Use QMetaObject.invokeMethod to run on main thread
+                            from PyQt6.QtCore import QMetaObject, Q_ARG, Qt
+                            
+                            def show_dialog():
+                                msg = QMessageBox(parent_window)
+                                msg.setWindowTitle("Update Available")
+                                msg.setText(f"A new version {latest_version} is available!")
+                                msg.setInformativeText("Would you like to download it now?")
+                                msg.setStandardButtons(QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No)
+                                msg.setDefaultButton(QMessageBox.StandardButton.Yes)
+                                if msg.exec() == QMessageBox.StandardButton.Yes:
+                                    QDesktopServices.openUrl(QUrl(data.get("html_url")))
+                            
+                            # We need to run this on the main thread.
+                            # Since we are in a thread, we can't create widgets directly.
+                            # A simple way is to use a signal, but we don't have a class here.
+                            # We can define a SignalObject.
+                            
+                            # Let's reuse the existing LogSignal concept or create a new one.
+                            update_signal.show_update.emit(latest_version, data.get("html_url"))
+
+                except Exception as e:
+                    logger.error(f"Update check failed: {e}")
+
+            # Define Signal for Update
+            class UpdateSignal(QObject):
+                show_update = pyqtSignal(str, str)
+            
+            update_signal = UpdateSignal()
+            def on_show_update(version, url):
+                msg = QMessageBox(window)
+                msg.setWindowTitle("Update Available")
+                msg.setText(f"A new version {version} is available!")
+                msg.setInformativeText("Would you like to download it now?")
+                msg.setStandardButtons(QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No)
+                msg.setDefaultButton(QMessageBox.StandardButton.Yes)
+                if msg.exec() == QMessageBox.StandardButton.Yes:
+                    QDesktopServices.openUrl(QUrl(url))
+            
+            update_signal.show_update.connect(on_show_update)
+
             timer = QTimer()
             timer.timeout.connect(check_connection)
             timer.start(100) # Check more frequently for smooth progress bar
