@@ -4,8 +4,24 @@ import logging
 import sys
 import os
 import threading
+import traceback
+import time
 from datetime import datetime
-import pyperclip
+
+# Global Exception Hook to catch crashes and keep window open
+def exception_hook(exctype, value, tb):
+    print("CRITICAL ERROR OCCURRED:")
+    print("".join(traceback.format_exception(exctype, value, tb)))
+    input("Press Enter to exit...")
+    sys.exit(1)
+
+sys.excepthook = exception_hook
+
+try:
+    import pyperclip
+except ImportError:
+    print("Warning: pyperclip not found. Clipboard features will be disabled.")
+    pyperclip = None
 
 from quart import Quart, render_template, websocket, request, jsonify
 import websockets
@@ -13,8 +29,10 @@ from chat_manager import ChatManager
 
 # Try to import PyQt6 for GUI
 try:
-    from PyQt6.QtWidgets import QApplication, QMainWindow, QVBoxLayout, QWidget, QLabel, QTextEdit
+    from PyQt6.QtWidgets import QApplication, QMainWindow, QVBoxLayout, QWidget, QLabel, QTextEdit, QProgressBar, QMessageBox
     from PyQt6.QtWebEngineWidgets import QWebEngineView
+    from PyQt6.QtWebEngineCore import QWebEnginePage
+    from PyQt6.QtGui import QDesktopServices
     from PyQt6.QtCore import QUrl, QTimer, pyqtSignal, QObject
     GUI_AVAILABLE = True
 except ImportError:
@@ -65,7 +83,10 @@ BASE_WS = "wss://stream.plsdonate.com/api/user/{}/websocket"
 donation_history = []  # Store session history
 chat_manager = ChatManager()
 
-logging.basicConfig(level=logging.INFO)
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+)
 # Silence annoying google cache warning
 logging.getLogger('googleapiclient.discovery_cache').setLevel(logging.ERROR)
 logger = logging.getLogger(__name__)
@@ -193,6 +214,9 @@ async def get_history():
 
 @app.route("/api/copy_to_clipboard", methods=["POST"])
 async def copy_to_clipboard():
+    if not pyperclip:
+        return jsonify({"status": "error", "message": "Clipboard module not available"}), 500
+        
     data = await request.get_json()
     text = data.get("text", "")
     try:
@@ -241,6 +265,43 @@ if __name__ == "__main__":
             logger.error(f"Server error: {e}")
 
     if GUI_AVAILABLE:
+        # Custom WebEnginePage to open links in system browser
+        class CustomWebEnginePage(QWebEnginePage):
+            def acceptNavigationRequest(self, url,  _type, isMainFrame):
+                url_str = url.toString()
+                logger.info(f"Navigation Request: {url_str} (Type: {_type})")
+                
+                # Check if it's an external link (not our local server)
+                host = url.host()
+                if host and host != "127.0.0.1" and host != "localhost":
+                    logger.info(f"External link detected: {url_str}")
+                    QDesktopServices.openUrl(url)
+                    return False
+                
+                # Also handle explicit link clicks just in case
+                if _type == QWebEnginePage.NavigationType.NavigationTypeLinkClicked:
+                    logger.info(f"Link Click detected: {url_str}")
+                    QDesktopServices.openUrl(url)
+                    return False
+                    
+                return super().acceptNavigationRequest(url, _type, isMainFrame)
+
+            def createWindow(self, _type):
+                # Handle target="_blank" clicks
+                # We return a new dummy page to handle the navigation request off-screen.
+                # This prevents the main window from navigating away or becoming blank.
+                # The dummy page will trigger its own acceptNavigationRequest, 
+                # which opens the system browser and returns False.
+                # QWebEnginePage expects a QObject parent (optional) or QWebEngineProfile
+                # Here we pass None as parent to avoid type errors, but we need to keep a reference
+                # so it doesn't get garbage collected immediately.
+                new_page = CustomWebEnginePage(parent=None)
+                # Keep a reference to prevent garbage collection
+                if not hasattr(self, '_extra_pages'):
+                    self._extra_pages = []
+                self._extra_pages.append(new_page)
+                return new_page
+
         # Define Log Signals/Handler for GUI
         class LogSignal(QObject):
             write = pyqtSignal(str)
@@ -271,6 +332,25 @@ if __name__ == "__main__":
             title_label.setStyleSheet("font-size: 24px; font-weight: bold; margin: 20px; color: #ffffff;")
             layout.addWidget(title_label)
             
+            # Progress Bar
+            progress_bar = QProgressBar()
+            progress_bar.setStyleSheet("""
+                QProgressBar {
+                    border: 2px solid grey;
+                    border-radius: 5px;
+                    text-align: center;
+                    background-color: #2b2b2b;
+                    color: white;
+                }
+                QProgressBar::chunk {
+                    background-color: #007acc;
+                    width: 20px;
+                }
+            """)
+            progress_bar.setRange(0, 100)
+            progress_bar.setValue(0)
+            layout.addWidget(progress_bar)
+            
             log_view = QTextEdit()
             log_view.setReadOnly(True)
             log_view.setStyleSheet("background-color: #1e1e1e; color: #d4d4d4; font-family: Consolas, monospace; font-size: 12px; padding: 10px;")
@@ -295,15 +375,28 @@ if __name__ == "__main__":
             # Non-blocking Check for Server
             import urllib.request
             
+            start_time = time.time()
+            
             def check_connection():
+                elapsed = time.time() - start_time
+                # Update progress (0-90% based on time, last 10% on success)
+                progress = min(int((elapsed / 3.0) * 90), 90)
+                progress_bar.setValue(progress)
+                
+                if elapsed < 3:
+                    return # Wait at least 3 seconds
+
                 try:
                     urllib.request.urlopen(URL, timeout=0.2)
                     # Server is ready!
+                    progress_bar.setValue(100)
                     logger.info("Server is ready! Loading dashboard...")
                     timer.stop()
                     
                     # Switch to Browser
                     browser = QWebEngineView()
+                    page = CustomWebEnginePage(browser)
+                    browser.setPage(page)
                     browser.setUrl(QUrl(URL))
                     window.setCentralWidget(browser)
                     
@@ -314,7 +407,7 @@ if __name__ == "__main__":
             
             timer = QTimer()
             timer.timeout.connect(check_connection)
-            timer.start(500) # Check every 500ms
+            timer.start(100) # Check more frequently for smooth progress bar
             
             sys.exit(qt_app.exec())
         except Exception as e:
