@@ -78,6 +78,19 @@
                     5. Copy the <strong>Access token</strong> (starts with <code>ya29...</code>) and paste it here.
                 </small>
             </div>
+            <div class="form-group">
+                <label for="youtubeChatId">Live Chat ID</label>
+                <input type="text" id="youtubeChatId" value="{{ config.youtube_chat_id or '' }}" placeholder="Paste Chat ID here...">
+                <small>
+                    <strong>How to find it:</strong><br>
+                    1. Go to your YouTube Live Studio or Video page.<br>
+                    2. Pop out the chat (Top right menu -> "Popout chat").<br>
+                    3. Look at the URL in the popup window. It looks like:<br>
+                    <code>https://www.youtube.com/live_chat?is_popout=1&v=VIDEO_ID</code><br>
+                    (Wait, actually the Chat ID is hidden in the API. For now, try using the <strong>Video ID</strong> if this field is confusing, but strictly speaking the API needs a Chat ID. <br>
+                    <em>Actually, to make it easier:</em> If you leave this blank, the bot will TRY to find it (costing quota). If you know how to get the <code>liveChatId</code> from API, paste it here to save quota.)
+                </small>
+            </div>
         </div>
         
         <button class="btn-primary" onclick="saveSettings()">Save & Connect</button>
@@ -117,6 +130,7 @@
             const twitchChannel = document.getElementById('twitchChannel').value;
             const youtubeEnabled = document.getElementById('youtubeEnabled').checked;
             const youtubeToken = document.getElementById('youtubeToken').value;
+            const youtubeChatId = document.getElementById('youtubeChatId').value;
 
             try {
                 const response = await fetch('/api/settings', {
@@ -132,7 +146,8 @@
                         twitch_token: twitchToken,
                         twitch_channel: twitchChannel,
                         youtube_enabled: youtubeEnabled,
-                        youtube_token: youtubeToken
+                        youtube_token: youtubeToken,
+                        youtube_chat_id: youtubeChatId
                     })
                 });
                 

@@ -19,7 +19,8 @@ config = {
     "twitch_token": "",
     "twitch_channel": "",
     "youtube_enabled": False,
-    "youtube_token": ""
+    "youtube_token": "",
+    "youtube_chat_id": ""
 }
 
 # Load config

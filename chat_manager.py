@@ -32,12 +32,9 @@ class ChatManager:
         self.config = {}
         self.twitch_bot = None
         self.twitch_task = None
-        self.youtube_chat_id = None
     
     async def update_config(self, config):
         self.config = config
-        # Reset cached chat ID when config changes (e.g. new token)
-        self.youtube_chat_id = None
         
         # Handle Twitch Reconnect
         if self.twitch_bot:
@@ -81,37 +78,22 @@ class ChatManager:
 
     def send_youtube_sync(self, message):
         token = self.config.get('youtube_token')
+        chat_id = self.config.get('youtube_chat_id')
+        
+        if not chat_id:
+            logger.warning("YouTube Chat ID not set. Please enter it in the dashboard.")
+            return
+
         try:
             creds = Credentials(token)
             youtube = build('youtube', 'v3', credentials=creds)
             
-            # 1. Get live broadcast ID (only if not cached)
-            if not self.youtube_chat_id:
-                try:
-                    request = youtube.liveBroadcasts().list(
-                        part="snippet",
-                        broadcastStatus="active",
-                        broadcastType="all"
-                    )
-                    response = request.execute()
-                    
-                    if not response.get('items'):
-                        logger.warning("No active YouTube broadcast found.")
-                        return
-
-                    self.youtube_chat_id = response['items'][0]['snippet']['liveChatId']
-                    logger.info(f"Cached YouTube LiveChat ID: {self.youtube_chat_id}")
-                except Exception as e:
-                     # Reset cache on error to force retry next time
-                    self.youtube_chat_id = None
-                    raise e
-            
-            # 2. Insert message
+            # 2. Insert message directly using provided ID
             youtube.liveChatMessages().insert(
                 part="snippet",
                 body={
                     "snippet": {
-                        "liveChatId": self.youtube_chat_id,
+                        "liveChatId": chat_id,
                         "type": "textMessageEvent",
                         "textMessageDetails": {
                             "messageText": message
@@ -125,12 +107,12 @@ class ChatManager:
                 logger.warning("YouTube daily quota exceeded! Disabling YouTube integration for this session.")
                 logger.warning("It will reset automatically tomorrow (Pacific Time).")
                 self.config['youtube_enabled'] = False
-                self.youtube_chat_id = None
             else:
                 logger.error(f"YouTube API error: {e}")
-                self.youtube_chat_id = None
         except Exception as e:
-            logger.error(f"YouTube send error: {e}")
-            # If we get a 403 or 404, it might mean the stream ended or chat ID changed.
-            # Reset cache so we try to find the new stream ID next time.
-            self.youtube_chat_id = None
+            error_msg = str(e)
+            if "refresh the access token" in error_msg or "401" in error_msg:
+                 logger.warning("YouTube Access Token expired. Please generate a new one in the dashboard.")
+                 self.config['youtube_enabled'] = False
+            else:
+                logger.error(f"YouTube send error: {e}")
