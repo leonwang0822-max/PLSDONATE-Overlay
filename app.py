@@ -8,7 +8,7 @@ import traceback
 import time
 from datetime import datetime
 
-VERSION = "v1.0.0"
+VERSION = "v1.0.1"
 GITHUB_REPO = "leonwang0822-max/PLSDONATE-Overlay"
 
 # Global Exception Hook to catch crashes and keep window open
@@ -324,14 +324,14 @@ if __name__ == "__main__":
             qt_app.setApplicationName("PLS DONATE Overlay Manager")
             
             window = QMainWindow()
-            window.setWindowTitle("PLS DONATE Overlay Manager")
+            window.setWindowTitle(f"PLS DONATE Overlay Manager {VERSION}")
             window.resize(1024, 800)
             
             # Setup Loading Screen
             loading_widget = QWidget()
             layout = QVBoxLayout()
             
-            title_label = QLabel("Starting PLS DONATE Overlay...")
+            title_label = QLabel(f"Starting PLS DONATE Overlay {VERSION}...")
             title_label.setStyleSheet("font-size: 24px; font-weight: bold; margin: 20px; color: #ffffff;")
             layout.addWidget(title_label)
             
