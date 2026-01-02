@@ -12,6 +12,8 @@ A lightweight, local tool to track [PLS DONATE](https://www.roblox.com/games/873
 *   **Auto-Save**: Remembers your Roblox User ID and settings between restarts.
 *   **Chat Integration**: Automatically sends "Thank You" messages to Twitch and YouTube live chat.
 
+![Twitch Chat Preview](twitch_chat.png)
+
 ## Installation
 
 1.  Ensure you have **Python 3.7+** installed.
