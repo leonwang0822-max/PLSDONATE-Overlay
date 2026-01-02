@@ -188,7 +188,7 @@ async def startup():
 
 @app.route("/")
 async def index():
-    return await render_template("index.html", config=config)
+    return await render_template("index.html", config=config, version=VERSION)
 
 @app.route("/leaderboard")
 async def leaderboard():
