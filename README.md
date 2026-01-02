@@ -19,7 +19,7 @@ A lightweight, local tool to track [PLS DONATE](https://www.roblox.com/games/873
 ### Option 1: Standalone App (Recommended)
 1.  Download the latest `PLS DONATE Overlay.exe` from the releases.
 2.  Double-click to run. No installation required.
-    *   *Note: Settings are saved in your AppData folder, so you can move the EXE anywhere.*
+    *   *Note: Settings are saved in `%APPDATA%\PLS_DONATE_Overlay\config.json`, so you can move the EXE anywhere.*
 
 ### Option 2: Run from Source
 1.  Ensure you have **Python 3.7+** installed.

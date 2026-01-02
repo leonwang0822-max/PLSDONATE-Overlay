@@ -5,6 +5,7 @@ import sys
 import os
 import threading
 from datetime import datetime
+import pyperclip
 
 from quart import Quart, render_template, websocket, request, jsonify
 import websockets
@@ -189,6 +190,17 @@ async def update_settings():
 @app.route("/api/history")
 async def get_history():
     return jsonify(donation_history)
+
+@app.route("/api/copy_to_clipboard", methods=["POST"])
+async def copy_to_clipboard():
+    data = await request.get_json()
+    text = data.get("text", "")
+    try:
+        pyperclip.copy(text)
+        return jsonify({"status": "ok"})
+    except Exception as e:
+        logger.error(f"Clipboard copy failed: {e}")
+        return jsonify({"status": "error", "message": str(e)}), 500
 
 @app.websocket("/ws")
 async def ws():

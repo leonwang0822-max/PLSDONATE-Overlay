@@ -101,7 +101,7 @@
             <p style="margin-bottom: 15px;">Add this as a <strong>Browser Source</strong> in OBS Studio.</p>
             <div class="source-link">
                 <span>Leaderboard Overlay</span>
-                <a href="/leaderboard" target="_blank">Open Link ↗</a>
+                <button onclick="copyLink('/leaderboard', this)" style="background: var(--card-bg); border: 1px solid var(--border-color); color: var(--text-color); padding: 5px 10px; cursor: pointer; border-radius: 4px;">Copy Link 📋</button>
             </div>
         </div>
 
@@ -115,6 +115,40 @@
     </div>
 
     <script>
+        async function copyLink(path, btn) {
+            const url = window.location.protocol + '//' + window.location.host + path;
+            
+            // Function to show success message
+            const showSuccess = () => {
+                const original = btn.textContent;
+                btn.textContent = 'Copied! ✅';
+                setTimeout(() => {
+                    btn.textContent = 'Copy Link 📋';
+                }, 1500);
+            };
+
+            // Call Python API to copy to system clipboard
+            try {
+                const response = await fetch('/api/copy_to_clipboard', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ text: url })
+                });
+                
+                if (response.ok) {
+                    showSuccess();
+                } else {
+                    // Fallback to prompt if API fails
+                    prompt("Copy this link:", url);
+                }
+            } catch (err) {
+                console.error('API copy failed', err);
+                prompt("Copy this link:", url);
+            }
+        }
+
         async function saveSettings() {
             const btn = document.querySelector('.btn-primary');
             const originalText = btn.textContent;
