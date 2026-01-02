@@ -1,0 +1,78 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PLS DONATE Overlay Manager</title>
+    <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+    <div class="dashboard">
+        <h1>PLS DONATE Overlay Manager</h1>
+        
+        <div class="form-group">
+            <label for="userId">Roblox User ID to Track:</label>
+            <input type="text" id="userId" value="{{ config.user_id or '' }}" placeholder="Enter User ID">
+        </div>
+        
+        <div class="form-group">
+            <label for="minAmount">Global Minimum Amount for Alert:</label>
+            <input type="number" id="minAmount" value="{{ config.min_amount }}" placeholder="0">
+        </div>
+        
+        <button onclick="saveSettings()">Save & Connect</button>
+        
+        <hr>
+        
+        <h2>OBS Browser Sources</h2>
+        <p>Copy this link into your OBS Browser Source.</p>
+        
+        <h3>Leaderboard</h3>
+        <ul>
+            <li><a href="/leaderboard" target="_blank">Session Leaderboard</a></li>
+        </ul>
+
+        <hr>
+        <h3>Recent Events</h3>
+        <ul id="eventLog">
+            <li>Waiting for events...</li>
+        </ul>
+    </div>
+
+    <script>
+        async function saveSettings() {
+            const userId = document.getElementById('userId').value;
+            const minAmount = document.getElementById('minAmount').value;
+            
+            const response = await fetch('/api/settings', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    user_id: userId,
+                    min_amount: minAmount
+                })
+            });
+            
+            const data = await response.json();
+            if (data.status === 'ok') {
+                alert('Settings saved! Connecting...');
+                location.reload();
+            }
+        }
+
+        // Connect to WS to show logs
+        const ws = new WebSocket('ws://' + location.host + '/ws');
+        ws.onmessage = function(event) {
+            const data = JSON.parse(event.data);
+            if (data.type === 'donation') {
+                const li = document.createElement('li');
+                li.textContent = `[${data.timestamp}] ${data.sender_name} donated ${data.amount}: ${data.message}`;
+                const list = document.getElementById('eventLog');
+                list.insertBefore(li, list.firstChild);
+            }
+        };
+    </script>
+</body>
+</html>

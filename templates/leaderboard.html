@@ -1,0 +1,108 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Leaderboard</title>
+    <link rel="stylesheet" href="/static/style.css">
+    <style>
+        /* Text-only overrides */
+        body.transparent-bg {
+            background: transparent;
+        }
+        .leaderboard-container {
+            background: transparent !important; /* Remove box background */
+            width: auto;
+            padding: 0;
+            color: white;
+            text-shadow: 1px 1px 2px black;
+        }
+        .leaderboard-title {
+            text-align: left;
+            border-bottom: none;
+            margin-bottom: 5px;
+            color: #ffd700;
+            font-size: 1.2em;
+        }
+        .leaderboard-item {
+            border-bottom: none; /* Remove separator lines */
+            padding: 2px 0;
+            display: flex;
+            justify-content: flex-start; /* Override space-between */
+            gap: 5px; /* Closer together */
+        }
+        .donor-name {
+            font-weight: bold;
+            color: white;
+        }
+        .donor-amount {
+            color: #00ff00;
+        }
+    </style>
+</head>
+<body class="transparent-bg">
+    <div class="leaderboard-container">
+        <div class="leaderboard-title">Top Donators</div>
+        <ul class="leaderboard-list" id="leaderboardList">
+            <!-- Items will be injected here -->
+        </ul>
+    </div>
+
+    <script>
+        const donors = {}; // username -> { name, amount }
+        const listElement = document.getElementById('leaderboardList');
+        const maxItems = 10;
+
+        function updateLeaderboard(event) {
+            const username = event.sender_user;
+            const amount = event.amount;
+            const name = event.sender_name;
+
+            if (!donors[username]) {
+                donors[username] = { name: name, amount: 0, username: username };
+            }
+            donors[username].amount += amount;
+            // Update name in case they changed display name
+            donors[username].name = name;
+
+            render();
+        }
+
+        function render() {
+            // Convert to array and sort
+            const sorted = Object.values(donors).sort((a, b) => b.amount - a.amount);
+            
+            // Take top N
+            const top = sorted.slice(0, maxItems);
+
+            listElement.innerHTML = '';
+            
+            top.forEach(donor => {
+                const li = document.createElement('li');
+                li.className = 'leaderboard-item';
+                // Format: Username (AmountR$)
+                li.innerHTML = `
+                    <span class="donor-name">${donor.username}</span> <span class="donor-amount">(${donor.amount}R$)</span>
+                `;
+                listElement.appendChild(li);
+            });
+        }
+
+        // Fetch history on load
+        fetch('/api/history')
+            .then(res => res.json())
+            .then(history => {
+                history.forEach(updateLeaderboard);
+            });
+
+        // Listen for new events
+        const ws = new WebSocket('ws://' + location.host + '/ws');
+        ws.onmessage = function(event) {
+            const data = JSON.parse(event.data);
+            if (data.type === 'donation') {
+                updateLeaderboard(data);
+            }
+        };
+    </script>
+</body>
+</html>
