@@ -10,6 +10,7 @@ A lightweight, local tool to track [PLS DONATE](https://www.roblox.com/games/873
 *   **Live Leaderboard**: Automatically sorts and displays top donors for the current session.
 *   **OBS-Ready**: Text-only, transparent background designed to be added as a Browser Source.
 *   **Auto-Save**: Remembers your Roblox User ID and settings between restarts.
+*   **Chat Integration**: Automatically sends "Thank You" messages to Twitch and YouTube live chat.
 
 ## Installation
 
@@ -27,13 +28,30 @@ A lightweight, local tool to track [PLS DONATE](https://www.roblox.com/games/873
     ```
 2.  Open your browser and go to:
     [http://localhost:5000](http://localhost:5000)
-3.  Enter your **Roblox User ID** (found in your profile URL) and click **Save & Connect**.
+3.  **Setup**:
+    *   Enter your **Roblox User ID**.
+    *   (Optional) Configure **Twitch/YouTube Chat** integration in the new section.
+    *   Click **Save & Connect**.
 4.  Copy the **Leaderboard Link** provided on the dashboard.
 5.  In **OBS Studio**:
     *   Add a new **Browser Source**.
     *   Paste the link.
     *   Set the Width/Height as needed (e.g., 400x600).
     *   The background is transparent by default.
+
+## Stream Integration
+
+You can configure the bot to send messages like:
+> Thanks for the 100R$ donation by @LeonW
+
+### Twitch Setup
+1.  Get an OAuth Token from [https://twitchapps.com/tmi/](https://twitchapps.com/tmi/).
+2.  Enter the token (starts with `oauth:...`) and your Channel Name.
+
+### YouTube Setup
+1.  Requires a valid **OAuth Access Token** with `youtube` scope.
+2.  Enter the token in the dashboard.
+    *   *Note: Access tokens expire quickly (1 hour). This feature requires generating a new token for each session or implementing a full OAuth flow.*
 
 ## Leaderboard Format
 

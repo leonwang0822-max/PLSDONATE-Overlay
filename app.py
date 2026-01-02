@@ -5,6 +5,7 @@ from datetime import datetime
 
 from quart import Quart, render_template, websocket, request, jsonify
 import websockets
+from chat_manager import ChatManager
 
 app = Quart(__name__)
 
@@ -12,7 +13,13 @@ app = Quart(__name__)
 config_file = "config.json"
 config = {
     "user_id": None,
-    "min_amount": 0
+    "min_amount": 0,
+    "chat_template": "Thanks for the {amount}R$ donation by @{username}",
+    "twitch_enabled": False,
+    "twitch_token": "",
+    "twitch_channel": "",
+    "youtube_enabled": False,
+    "youtube_token": ""
 }
 
 # Load config
@@ -27,8 +34,11 @@ except FileNotFoundError:
 connected_clients = set()
 BASE_WS = "wss://stream.plsdonate.com/api/user/{}/websocket"
 donation_history = []  # Store session history
+chat_manager = ChatManager()
 
 logging.basicConfig(level=logging.INFO)
+# Silence annoying google cache warning
+logging.getLogger('googleapiclient.discovery_cache').setLevel(logging.ERROR)
 logger = logging.getLogger(__name__)
 
 def save_config():
@@ -56,7 +66,8 @@ async def plsdonate_listener():
         logger.info(f"Connecting to {url}...")
         
         try:
-            async with websockets.connect(url) as ws:
+            # Add ping_interval to keep connection alive (every 10s)
+            async with websockets.connect(url, ping_interval=10, ping_timeout=10) as ws:
                 logger.info(f"Connected to stream for user {target_user_id}")
                 current_user_id = target_user_id
                 
@@ -68,6 +79,9 @@ async def plsdonate_listener():
                         
                     try:
                         data = json.loads(msg)
+                        if "ping_interval" in data:
+                             # It's a ping message, ignore
+                             continue
                         timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
                         
                         # Process donation
@@ -95,6 +109,10 @@ async def plsdonate_listener():
                                 
                             logger.info(f"Donation: {sender_name} - {amount}")
                             await broadcast(event)
+                            
+                            # Send chat message if amount meets threshold
+                            if amount >= config.get("min_amount", 0):
+                                await chat_manager.send_message(event)
                         else:
                             # Forward other events if needed
                             pass
@@ -110,7 +128,10 @@ async def plsdonate_listener():
 
 @app.before_serving
 async def startup():
-    app.add_background_task(plsdonate_listener)
+    await chat_manager.update_config(config)
+    # Use app.add_background_task is not reliable for long running task in some Quart versions/servers
+    # Create a proper asyncio task
+    asyncio.create_task(plsdonate_listener())
 
 @app.route("/")
 async def index():
@@ -123,12 +144,17 @@ async def leaderboard():
 @app.route("/api/settings", methods=["POST"])
 async def update_settings():
     data = await request.get_json()
-    if "user_id" in data:
-        config["user_id"] = data["user_id"]
-    if "min_amount" in data:
-        config["min_amount"] = int(data["min_amount"])
+    
+    # Update config with all known keys
+    for key in config.keys():
+        if key in data:
+            if key == "min_amount":
+                config[key] = int(data[key])
+            else:
+                config[key] = data[key]
     
     save_config() # Save to file
+    await chat_manager.update_config(config)
     
     return jsonify({"status": "ok", "config": config})
 
@@ -148,9 +174,11 @@ async def ws():
         connected_clients.remove(websocket._get_current_object())
 
 if __name__ == "__main__":
-    import hypercorn.asyncio
-    from hypercorn.config import Config
-    
-    config_h = Config()
-    config_h.bind = ["localhost:5000"]
-    asyncio.run(hypercorn.asyncio.serve(app, config_h))
+    try:
+        app.run(host="localhost", port=5000)
+    except Exception:
+        logger.exception("Program crashed")
+        input("Press Enter to exit...")
+    finally:
+        # Keep window open if it stops for other reasons (like clean exit)
+        input("Press Enter to exit...")

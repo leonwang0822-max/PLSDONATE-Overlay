@@ -4,61 +4,151 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>PLS DONATE Overlay Manager</title>
-    <link rel="stylesheet" href="/static/style.css">
+    <link rel="stylesheet" href="/static/style.css?v=2">
 </head>
 <body>
     <div class="dashboard">
-        <h1>PLS DONATE Overlay Manager</h1>
-        
-        <div class="form-group">
-            <label for="userId">Roblox User ID to Track:</label>
-            <input type="text" id="userId" value="{{ config.user_id or '' }}" placeholder="Enter User ID">
+        <div class="dashboard-header">
+            <h1>PLS DONATE Overlay Manager</h1>
+            <p style="color: var(--text-muted);">Manage your OBS overlay and chat integration</p>
         </div>
         
-        <div class="form-group">
-            <label for="minAmount">Global Minimum Amount for Alert:</label>
-            <input type="number" id="minAmount" value="{{ config.min_amount }}" placeholder="0">
+        <!-- General Settings -->
+        <div class="section-card">
+            <h2 class="section-title">
+                <span style="color: var(--primary-color);">⚙️</span> General Settings
+            </h2>
+            <div class="form-grid">
+                <div class="form-group">
+                    <label for="userId">Roblox User ID to Track</label>
+                    <input type="text" id="userId" value="{{ config.user_id or '' }}" placeholder="Enter User ID (e.g. 123456789)">
+                </div>
+                <div class="form-group">
+                    <label for="minAmount">Minimum Amount for Alert/Chat</label>
+                    <input type="number" id="minAmount" value="{{ config.min_amount }}" placeholder="0">
+                </div>
+            </div>
+            <div class="form-group">
+                <label for="chatTemplate">Chat Message Template</label>
+                <input type="text" id="chatTemplate" value="{{ config.chat_template or 'Thanks for the {amount}R$ donation by @{username}' }}" placeholder="Thanks for the {amount}R$ donation by @{username}">
+                <small>Variables: <code>{username}</code>, <code>{amount}</code>, <code>{message}</code></small>
+            </div>
         </div>
-        
-        <button onclick="saveSettings()">Save & Connect</button>
-        
-        <hr>
-        
-        <h2>OBS Browser Sources</h2>
-        <p>Copy this link into your OBS Browser Source.</p>
-        
-        <h3>Leaderboard</h3>
-        <ul>
-            <li><a href="/leaderboard" target="_blank">Session Leaderboard</a></li>
-        </ul>
 
-        <hr>
-        <h3>Recent Events</h3>
-        <ul id="eventLog">
-            <li>Waiting for events...</li>
-        </ul>
+        <!-- Twitch Settings -->
+        <div class="section-card twitch-border">
+            <h2 class="section-title">
+                <span style="color: var(--twitch-color);">👾</span> Twitch Integration
+            </h2>
+            <div class="checkbox-group" style="margin-bottom: 20px;">
+                <input type="checkbox" id="twitchEnabled" {{ 'checked' if config.twitch_enabled else '' }}>
+                <label for="twitchEnabled">Enable Twitch Chat</label>
+            </div>
+            <div class="form-grid">
+                <div class="form-group">
+                    <label for="twitchChannel">Channel Name</label>
+                    <input type="text" id="twitchChannel" value="{{ config.twitch_channel or '' }}" placeholder="your_channel_name">
+                </div>
+                <div class="form-group">
+                    <label for="twitchToken">OAuth Token</label>
+                    <input type="password" id="twitchToken" value="{{ config.twitch_token or '' }}" placeholder="oauth:...">
+                    <small>Go to <a href="https://twitchtokengenerator.com/" target="_blank">Twitch Token Generator</a>, toggle <strong>"Custom Scope Token"</strong>, check <strong>"chat:edit"</strong> and <strong>"chat:read"</strong>, then click Generate. Copy the <strong>ACCESS TOKEN</strong>.</small>
+                </div>
+            </div>
+        </div>
+
+        <!-- YouTube Settings -->
+        <div class="section-card youtube-border">
+            <h2 class="section-title">
+                <span style="color: var(--youtube-color);">▶️</span> YouTube Integration
+            </h2>
+            <div class="checkbox-group" style="margin-bottom: 20px;">
+                <input type="checkbox" id="youtubeEnabled" {{ 'checked' if config.youtube_enabled else '' }}>
+                <label for="youtubeEnabled">Enable YouTube Chat</label>
+            </div>
+            <div class="form-group">
+                <label for="youtubeToken">Access Token</label>
+                <input type="password" id="youtubeToken" value="{{ config.youtube_token or '' }}" placeholder="ya29...">
+                <small>
+                    <strong>How to get a token:</strong><br>
+                    1. Go to <a href="https://developers.google.com/oauthplayground/" target="_blank">Google OAuth Playground</a>.<br>
+                    2. In "Input your own scopes", paste: <code>https://www.googleapis.com/auth/youtube</code> and click "Authorize APIs".<br>
+                    3. Sign in with your YouTube account.<br>
+                    4. Click "Exchange authorization code for tokens".<br>
+                    5. Copy the <strong>Access token</strong> (starts with <code>ya29...</code>) and paste it here.
+                </small>
+            </div>
+        </div>
+        
+        <button class="btn-primary" onclick="saveSettings()">Save & Connect</button>
+        
+        <!-- OBS Links -->
+        <div class="section-card" style="margin-top: 40px;">
+            <h2 class="section-title">🎥 OBS Browser Sources</h2>
+            <p style="margin-bottom: 15px;">Add this as a <strong>Browser Source</strong> in OBS Studio.</p>
+            <div class="source-link">
+                <span>Leaderboard Overlay</span>
+                <a href="/leaderboard" target="_blank">Open Link ↗</a>
+            </div>
+        </div>
+
+        <!-- Event Log -->
+        <div class="section-card">
+            <h2 class="section-title">📜 Recent Events</h2>
+            <ul id="eventLog">
+                <li style="color: var(--text-muted); font-style: italic;">Waiting for events...</li>
+            </ul>
+        </div>
     </div>
 
     <script>
         async function saveSettings() {
+            const btn = document.querySelector('.btn-primary');
+            const originalText = btn.textContent;
+            btn.textContent = 'Saving...';
+            btn.disabled = true;
+
             const userId = document.getElementById('userId').value;
             const minAmount = document.getElementById('minAmount').value;
             
-            const response = await fetch('/api/settings', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json'
-                },
-                body: JSON.stringify({
-                    user_id: userId,
-                    min_amount: minAmount
-                })
-            });
-            
-            const data = await response.json();
-            if (data.status === 'ok') {
-                alert('Settings saved! Connecting...');
-                location.reload();
+            const chatTemplate = document.getElementById('chatTemplate').value;
+            const twitchEnabled = document.getElementById('twitchEnabled').checked;
+            const twitchToken = document.getElementById('twitchToken').value;
+            const twitchChannel = document.getElementById('twitchChannel').value;
+            const youtubeEnabled = document.getElementById('youtubeEnabled').checked;
+            const youtubeToken = document.getElementById('youtubeToken').value;
+
+            try {
+                const response = await fetch('/api/settings', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        user_id: userId,
+                        min_amount: minAmount,
+                        chat_template: chatTemplate,
+                        twitch_enabled: twitchEnabled,
+                        twitch_token: twitchToken,
+                        twitch_channel: twitchChannel,
+                        youtube_enabled: youtubeEnabled,
+                        youtube_token: youtubeToken
+                    })
+                });
+                
+                const data = await response.json();
+                if (data.status === 'ok') {
+                    // Show success state briefly
+                    btn.textContent = 'Saved!';
+                    btn.style.background = 'var(--success-color)';
+                    setTimeout(() => {
+                        location.reload();
+                    }, 500);
+                }
+            } catch (e) {
+                alert('Error saving settings');
+                btn.textContent = originalText;
+                btn.disabled = false;
             }
         }
 
@@ -68,8 +158,15 @@
             const data = JSON.parse(event.data);
             if (data.type === 'donation') {
                 const li = document.createElement('li');
-                li.textContent = `[${data.timestamp}] ${data.sender_name} donated ${data.amount}: ${data.message}`;
+                // Color code amount
+                li.innerHTML = `<span style="color: var(--text-muted)">[${data.timestamp}]</span> <strong>${data.sender_name}</strong> donated <span style="color: #ffd700">${data.amount}R$</span>: ${data.message}`;
                 const list = document.getElementById('eventLog');
+                
+                // Remove "Waiting..." text if present
+                if (list.firstElementChild && list.firstElementChild.textContent.includes('Waiting')) {
+                    list.innerHTML = '';
+                }
+                
                 list.insertBefore(li, list.firstChild);
             }
         };
