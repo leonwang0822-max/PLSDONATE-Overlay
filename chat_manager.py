@@ -48,9 +48,19 @@ class ChatManager:
             try:
                 self.twitch_bot = TwitchBot(config['twitch_token'], config['twitch_channel'])
                 # Start bot in background
-                self.twitch_task = asyncio.create_task(self.twitch_bot.start())
+                self.twitch_task = asyncio.create_task(self._run_twitch_safely())
             except Exception as e:
                 logger.error(f"Failed to start Twitch bot: {e}")
+
+    async def _run_twitch_safely(self):
+        try:
+            await self.twitch_bot.start()
+        except Exception as e:
+            if "Login unsuccessful" in str(e) or "Authentication failed" in str(e):
+                logger.error(f"Twitch Login Failed: {e}")
+                logger.error("Please check your Twitch Token. It must be a USER Token with 'chat:read' and 'chat:edit' scopes.")
+            else:
+                logger.error(f"Twitch Bot crashed: {e}")
 
     async def send_message(self, donation_data):
         template = self.config.get('chat_template')

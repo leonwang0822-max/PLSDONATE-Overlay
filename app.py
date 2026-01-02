@@ -1,16 +1,43 @@
 import asyncio
 import json
 import logging
+import sys
+import os
+import threading
 from datetime import datetime
 
 from quart import Quart, render_template, websocket, request, jsonify
 import websockets
 from chat_manager import ChatManager
 
-app = Quart(__name__)
+# Try to import PyQt6 for GUI
+try:
+    from PyQt6.QtWidgets import QApplication, QMainWindow, QVBoxLayout, QWidget, QLabel, QTextEdit
+    from PyQt6.QtWebEngineWidgets import QWebEngineView
+    from PyQt6.QtCore import QUrl, QTimer, pyqtSignal, QObject
+    GUI_AVAILABLE = True
+except ImportError:
+    GUI_AVAILABLE = False
+
+# Determine paths for PyInstaller
+if getattr(sys, 'frozen', False):
+    template_folder = os.path.join(sys._MEIPASS, 'templates')
+    static_folder = os.path.join(sys._MEIPASS, 'static')
+    app = Quart(__name__, template_folder=template_folder, static_folder=static_folder)
+else:
+    app = Quart(__name__)
 
 # Configuration
-config_file = "config.json"
+if getattr(sys, 'frozen', False):
+    # If running as EXE, save config to AppData to be persistent
+    app_data = os.path.join(os.environ.get('APPDATA'), 'PLS_DONATE_Overlay')
+    if not os.path.exists(app_data):
+        os.makedirs(app_data)
+    config_file = os.path.join(app_data, "config.json")
+else:
+    # If running from source, save to current directory
+    config_file = "config.json"
+
 config = {
     "user_id": None,
     "min_amount": 0,
@@ -175,11 +202,120 @@ async def ws():
         connected_clients.remove(websocket._get_current_object())
 
 if __name__ == "__main__":
-    try:
-        app.run(host="localhost", port=5000)
-    except Exception:
-        logger.exception("Program crashed")
-        input("Press Enter to exit...")
-    finally:
-        # Keep window open if it stops for other reasons (like clean exit)
-        input("Press Enter to exit...")
+    PORT = 5000
+    HOST = "127.0.0.1"
+    URL = f"http://{HOST}:{PORT}"
+
+    def run_server():
+        try:
+            # Run Hypercorn directly to avoid signal handler issues in background thread
+            from hypercorn.config import Config
+            from hypercorn.asyncio import serve
+            
+            config = Config()
+            config.bind = [f"{HOST}:{PORT}"]
+            config.use_reloader = False
+            
+            # Create a new loop for this thread
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
+            
+            # Custom shutdown trigger to prevent Hypercorn from registering signal handlers
+            shutdown_event = asyncio.Event()
+            
+            # Run the server
+            loop.run_until_complete(serve(app, config, shutdown_trigger=shutdown_event.wait))
+        except Exception as e:
+            logger.error(f"Server error: {e}")
+
+    if GUI_AVAILABLE:
+        # Define Log Signals/Handler for GUI
+        class LogSignal(QObject):
+            write = pyqtSignal(str)
+            
+        class GuiLogHandler(logging.Handler):
+            def __init__(self, sig):
+                super().__init__()
+                self.sig = sig
+                
+            def emit(self, record):
+                msg = self.format(record)
+                self.sig.write.emit(msg)
+
+        # Start GUI First
+        try:
+            qt_app = QApplication(sys.argv)
+            qt_app.setApplicationName("PLS DONATE Overlay Manager")
+            
+            window = QMainWindow()
+            window.setWindowTitle("PLS DONATE Overlay Manager")
+            window.resize(1024, 800)
+            
+            # Setup Loading Screen
+            loading_widget = QWidget()
+            layout = QVBoxLayout()
+            
+            title_label = QLabel("Starting PLS DONATE Overlay...")
+            title_label.setStyleSheet("font-size: 24px; font-weight: bold; margin: 20px; color: #ffffff;")
+            layout.addWidget(title_label)
+            
+            log_view = QTextEdit()
+            log_view.setReadOnly(True)
+            log_view.setStyleSheet("background-color: #1e1e1e; color: #d4d4d4; font-family: Consolas, monospace; font-size: 12px; padding: 10px;")
+            layout.addWidget(log_view)
+            
+            loading_widget.setLayout(layout)
+            window.setCentralWidget(loading_widget)
+            window.show()
+            
+            # Connect Logging
+            log_signal = LogSignal()
+            log_signal.write.connect(log_view.append)
+            gui_handler = GuiLogHandler(log_signal)
+            gui_handler.setFormatter(logging.Formatter('%(asctime)s - %(levelname)s - %(message)s'))
+            logging.getLogger().addHandler(gui_handler)
+            logger.info("Initializing application...")
+
+            # Start server in background thread
+            server_thread = threading.Thread(target=run_server, daemon=True)
+            server_thread.start()
+            
+            # Non-blocking Check for Server
+            import urllib.request
+            
+            def check_connection():
+                try:
+                    urllib.request.urlopen(URL, timeout=0.2)
+                    # Server is ready!
+                    logger.info("Server is ready! Loading dashboard...")
+                    timer.stop()
+                    
+                    # Switch to Browser
+                    browser = QWebEngineView()
+                    browser.setUrl(QUrl(URL))
+                    window.setCentralWidget(browser)
+                    
+                    # Cleanup logger
+                    logging.getLogger().removeHandler(gui_handler)
+                except Exception:
+                    pass # Keep waiting
+            
+            timer = QTimer()
+            timer.timeout.connect(check_connection)
+            timer.start(500) # Check every 500ms
+            
+            sys.exit(qt_app.exec())
+        except Exception as e:
+            logger.exception("GUI crashed")
+            input("Press Enter to exit...")
+    else:
+        logger.warning("PyQt6 not found. Running in console mode.")
+        try:
+            import webbrowser
+            threading.Timer(1.5, lambda: webbrowser.open(URL)).start()
+            app.run(host=HOST, port=PORT)
+        except Exception:
+            logger.exception("Program crashed")
+            input("Press Enter to exit...")
+        finally:
+            input("Press Enter to exit...")

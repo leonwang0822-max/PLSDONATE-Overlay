@@ -16,6 +16,12 @@ A lightweight, local tool to track [PLS DONATE](https://www.roblox.com/games/873
 
 ## Installation
 
+### Option 1: Standalone App (Recommended)
+1.  Download the latest `PLS DONATE Overlay.exe` from the releases.
+2.  Double-click to run. No installation required.
+    *   *Note: Settings are saved in your AppData folder, so you can move the EXE anywhere.*
+
+### Option 2: Run from Source
 1.  Ensure you have **Python 3.7+** installed.
 2.  Install the required dependencies:
     ```bash
@@ -24,12 +30,8 @@ A lightweight, local tool to track [PLS DONATE](https://www.roblox.com/games/873
 
 ## Usage
 
-1.  Start the application:
-    ```bash
-    python app.py
-    ```
-2.  Open your browser and go to:
-    [http://localhost:5000](http://localhost:5000)
+1.  Start the application (Run EXE or `python app.py`).
+2.  The dashboard window will open automatically.
 3.  **Setup**:
     *   Enter your **Roblox User ID**.
     *   (Optional) Configure **Twitch/YouTube Chat** integration in the new section.
